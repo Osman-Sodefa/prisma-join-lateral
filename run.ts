@@ -3,17 +3,18 @@ import { Post, PrismaClient, User } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-const USERS_TO_CREATED = 100;
+const USERS_TO_CREATE = 100;
 const POSTS_TO_CREATE_PER_USER = 10_000;
 const POSTS_PER_USER_TO_FETCH = 3;
 
-const start = async () => {
-  // clear existing data
+const clearData = async () => {
   await prisma.post.deleteMany();
   await prisma.user.deleteMany();
+};
 
+const initData = async () => {
   // create some random data
-  const newUsers = Array.from({ length: USERS_TO_CREATED }, () => ({
+  const newUsers = Array.from({ length: USERS_TO_CREATE }, () => ({
     id: uuid(),
   }));
   await prisma.user.createMany({
@@ -25,13 +26,15 @@ const start = async () => {
     newUsers.map(async (user) => {
       const posts = Array.from({ length: POSTS_TO_CREATE_PER_USER }, () => ({
         userId: user.id,
+        // create random date to avoid multiple posts with the same timestamp
         createdAt: new Date(Math.floor(Math.random() * now)),
       }));
       await prisma.post.createMany({ data: posts });
     })
   );
+};
 
-  console.time("find many be lateral join");
+const findByJoinLateral = async () => {
   const [users, posts] = await Promise.all([
     prisma.user.findMany({
       orderBy: {
@@ -66,15 +69,14 @@ const start = async () => {
     return map;
   }, new Map<User["id"], Post[]>());
 
-  const usersWithPostsLateral = users.map((user) => ({
+  return users.map((user) => ({
     ...user,
     posts: postsMap.get(user.id) ?? [],
   }));
+};
 
-  console.timeEnd("find many by lateral join");
-
-  console.time("find many by include");
-  const usersWithPostsInclude = await prisma.user.findMany({
+const findByInclude = async () => {
+  return prisma.user.findMany({
     orderBy: {
       id: "asc",
     },
@@ -87,6 +89,18 @@ const start = async () => {
       },
     },
   });
+};
+
+const start = async () => {
+  await clearData();
+  await initData();
+
+  console.time("find many by lateral join");
+  const usersWithPostsLateral = await findByJoinLateral();
+  console.timeEnd("find many by lateral join");
+
+  console.time("find many by include");
+  const usersWithPostsInclude = await findByInclude();
   console.timeEnd("find many by include");
 
   console.log(
