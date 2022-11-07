@@ -71,7 +71,7 @@ const start = async () => {
     posts: postsMap.get(user.id) ?? [],
   }));
 
-  console.timeEnd("find many be lateral join");
+  console.timeEnd("find many by lateral join");
 
   console.time("find many by include");
   const usersWithPostsInclude = await prisma.user.findMany({
